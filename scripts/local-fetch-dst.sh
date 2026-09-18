@@ -11,5 +11,6 @@ podman volume create "$VOLUME" >/dev/null 2>&1 || true
 podman run --rm -it --userns=keep-id:uid=1000,gid=1000 \
   -v "$VOLUME:/opt/dst" localhost/depotdownloader:3.4.0 \
   -app 343050 -os linux -osarch 64 -dir /opt/dst -max-downloads 8 "$@"
+# DepotDownloader does not restore the executable bit; dst-server's entrypoint tests -x.
 podman run --rm --userns=keep-id:uid=1000,gid=1000 -v "$VOLUME:/opt/dst" docker.io/library/alpine:3.20 \
-  sh -c 'ls -l /opt/dst/bin64/dontstarve_dedicated_server_nullrenderer_x64 && du -sh /opt/dst'
+  sh -c 'chmod +x /opt/dst/bin64/dontstarve_dedicated_server_nullrenderer_x64 && ls -l /opt/dst/bin64/dontstarve_dedicated_server_nullrenderer_x64 && du -sh /opt/dst'
