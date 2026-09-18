@@ -70,7 +70,12 @@ class Service:
         if master_cycles >= 0:
             result["cycles"] = master_cycles
         self.live = result
-        save_json(self.s.ctl_dir / "state.json", result)
+        # dst-server names the stop zip from this file's "cycles" (dst.sh: write_stop_zip).
+        # A poll that lands while the shards are mid-shutdown sees none alive and would
+        # otherwise clobber the last known day with -1 right before dst-server reads it;
+        # persist the last known day instead. /status still reports live (-1 when unknown).
+        persisted = result if result["cycles"] >= 0 else {**result, "cycles": self.state.last_cycles}
+        save_json(self.s.ctl_dir / "state.json", persisted)
 
         cycles, players = result["cycles"], result["players"]
         if cycles < 0 or not any(v["alive"] for v in result["shards"].values()):
