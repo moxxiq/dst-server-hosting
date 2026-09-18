@@ -15,7 +15,7 @@
 | Container engine | Rootless Podman, `podman compose` (podman-compose 1.6.0 via pipx on VPS; docker-compose provider on Mac is fine) |
 | Base image for DST | `docker.io/cm2network/steamcmd:latest` pinned by digest. Debian 13, i386 libs present, ships `steam` user UID 1000. Runs as `steam`, never root. |
 | VPS | Vultr, Ubuntu 26.04 LTS, x86_64, ≥2 GB RAM. Bootstrap also works on 24.04. |
-| Local dev | Apple Silicon Mac, podman machine with Rosetta. steamcmd (32-bit) segfaults under `qemu-i386`, so DST files are fetched with DepotDownloader instead; the 64-bit DST binary runs under Rosetta. |
+| Local dev | Apple Silicon Mac, rootful podman machine with Rosetta. steamcmd (32-bit) segfaults under `qemu-i386`, so DST files are fetched with DepotDownloader instead; the 64-bit DST binary runs under Rosetta. |
 | Backup destination | Cloudflare R2 only (S3 API via boto3). No other providers. |
 | Backup triggers | in-game day rollover, server became empty, SIGTERM stop, manual, pre-activate |
 | R2 policy | upload every `R2_EVERY_DAYS` (5) in-game days, on empty (`R2_ON_EMPTY=1`), on manual/pre-activate. Stop zips stay local. |
@@ -67,8 +67,7 @@ Secrets are scoped per service with `environment:` interpolation from `.env` (co
 dst-server-hosting/
   README.md
   bootstrap.sh                  # curl | sudo bash — public, no secrets
-  compose.yaml                  # production stack
-  compose.local.yaml            # Mac overrides (platform, AUTO_UPDATE=0, VM socket path)
+  compose.yaml                  # the stack (same file on VPS and Mac; differences live in .env)
   .env.example
   dst-server/
     Dockerfile
@@ -77,11 +76,11 @@ dst-server-hosting/
   dst-saves/
     Dockerfile
     requirements.txt
-    dstsaves/  __init__.py  main.py (FastAPI + loop)  poll.py  backup.py  r2.py  state.py
+    dstsaves/  __init__.py  config.py  main.py (FastAPI + loop)  shards.py  backup.py  restore.py  r2.py  state.py
   dst-admin/
     Dockerfile
     requirements.txt
-    dstadmin/  __init__.py  main.py  auth.py  podman.py  saves_client.py  cluster.py  wizard.py  mods.py  archive.py
+    dstadmin/  __init__.py  config.py  main.py  auth.py  podman.py  saves_client.py  cluster.py  mods.py  archive.py
     dstadmin/templates/  base.html  dashboard.html  clusters.html  wizard.html  mods.html  admins.html  console.html
     dstadmin/static/  pico.min.css  app.css  app.js
   scripts/
@@ -169,6 +168,7 @@ First successful poll only records state (no backup). `last_r2_cycles` and the l
 | `POST /backup?tag=manual\|pre-activate` | run backup now, returns name + whether uploaded |
 | `POST /upload/{name}` | upload an existing local zip to R2 (promote) |
 | `POST /restore?source=r2\|local&name=…` | copy/download zip into `data/parked/`; never touches the active cluster |
+| `POST /activate?name=…` | extract a parked zip over the active cluster dir (junk stripped, single top folder hoisted, traversal rejected). Refused with 409 while any shard is running. Used by dst-admin's activate flow, so extraction logic exists once. |
 | `DELETE /backups/{source}/{name}` | delete one backup |
 
 **SIGTERM.** Finish an in-flight upload (bounded by `stop_grace_period: 60s`), then exit.
@@ -198,7 +198,7 @@ Python 3.13 slim, `fastapi`, `uvicorn`, `jinja2`, `python-multipart`, `httpx`. U
 | Admins `/admins` | Textarea for `adminlist.txt`; on save keep only lines matching `^KU_[A-Za-z0-9_-]+$`. |
 | Console `/console` | Shard selector + command input; writes the line to `/ctl/<shard>.cmd` (nonblocking open; 409 if shard not running); shows the last 50 log lines after 2 s. |
 
-**Activate flow** (`POST /clusters/activate?name=`): 1) stop dst-server gracefully (dst-server writes a stop zip), 2) `POST dst-saves /backup?tag=pre-activate` if an active cluster exists, 3) delete `data/saves/<CLUSTER_NAME>/`, 4) extract the parked zip there (strip `__MACOSX`/`.DS_Store`; if the archive has a single top-level folder, hoist it; reject path traversal), 5) validate `cluster.ini` + at least one `server.ini`, 6) start dst-server. Failures return 500 with the step name; nothing is retried silently.
+**Activate flow** (`POST /clusters/activate?name=`): 1) stop dst-server gracefully (dst-server writes a stop zip), 2) `POST dst-saves /backup?tag=pre-activate` if an active cluster exists, 3) `POST dst-saves /activate?name=` (dst-saves replaces the active cluster dir with the parked zip's contents), 4) start dst-server. Uploads are validated in dst-admin (`archive.validate_cluster_zip`: real zip, no traversal, `cluster.ini` at depth 0 or 1). Failures return 500 with the step name; nothing is retried silently.
 
 **Park current** (`POST /clusters/park`): `POST dst-saves /backup?tag=manual` then copy the zip into `data/parked/`.
 
@@ -272,7 +272,7 @@ README documents: restricting `:8080` to the operator's IP with the Vultr firewa
 ## 11. Local development on the Mac
 
 1. `scripts/local-fetch-dst.sh` fills `dst-install` (DepotDownloader, anonymous login, native arm64).
-2. `podman compose -f compose.yaml -f compose.local.yaml up -d --build`. The override sets `platform: linux/amd64` on dst-server, `AUTO_UPDATE=0`, and the VM socket path for dst-admin. Bind mounts stay under `./data/` (fallback to named volumes if virtiofs ownership misbehaves).
+2. `.env` on the Mac sets `AUTO_UPDATE=0` and `PODMAN_SOCK=/run/podman/podman.sock` (the podman machine is rootful). `PODMAN_COMPOSE_PROVIDER=podman-compose podman compose up -d --build`. `compose.yaml` already pins `platform: linux/amd64` on dst-server. Bind mounts stay under `./data/` (verified: keep-id writes on virtiofs work).
 3. Open `http://localhost:8080`, upload `qkation-cooperative.zip`, activate.
 4. Definition of done (local): both shards log `Sim paused`; `data/backups/` and R2 receive zips on the expected triggers; graceful stop writes a stop zip and both shards exit cleanly within the grace period; the operator joins from their DST client with `c_connect("127.0.0.1", 10999, "qka")` and mods load.
 
@@ -298,4 +298,4 @@ README documents: restricting `:8080` to the operator's IP with the Vultr firewa
 
 Out of scope: HTTPS/reverse proxy, scheduled kicks or restarts, Lua hook mod, monitoring, multi-cluster hosting.
 
-Risks: DST x64 under Rosetta is untested (fallback: VPS smoke only); gvproxy UDP forwarding for a local client join (fallback: verify join on the VPS); `keep-id` with virtiofs bind mounts on the Mac (fallback: named volumes in `compose.local.yaml`).
+Risks: DST x64 under Rosetta is untested (fallback: VPS smoke only); gvproxy UDP forwarding for a local client join (fallback: verify join on the VPS); `keep-id` with virtiofs bind mounts on the Mac was verified for plain files; FIFOs live in the `ctl` named volume because virtiofs refuses `mkfifo`.
