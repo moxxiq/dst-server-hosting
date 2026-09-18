@@ -2857,8 +2857,9 @@ curl -fsS -X POST "http://127.0.0.1:8081/backup?tag=${TAG}" | python3 -m json.to
 # List backups, or fetch one into data/parked/.
 #   scripts/restore.sh                       list local + R2 backups
 #   scripts/restore.sh latest                newest R2 zip → data/parked/
-#   scripts/restore.sh <name> [--activate]   named zip → parked; --activate replaces the
-#                                            active cluster (stop, pre-activate backup, extract, start)
+#   scripts/restore.sh <name> [--activate [--yes]]
+#       named zip → parked; --activate replaces the active cluster (stop,
+#       pre-activate backup, extract, start), asking on a terminal or with --yes
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 API=http://127.0.0.1:8081
@@ -2870,7 +2871,7 @@ d = json.load(sys.stdin)
 for src in ("local", "r2"):
     print(f"== {src} ==")
     for e in d[src]:
-        print(f"{e[\"name\"]:48} {e[\"size\"] / 1048576:7.1f} MB")'
+        print("{:48} {:7.1f} MB".format(e["name"], e["size"] / 1048576))'
 }
 
 [[ $# -gt 0 ]] || { list; exit 0; }
@@ -2884,9 +2885,12 @@ SOURCE=r2
 curl -fsS -X POST "$API/restore?source=$SOURCE&name=$NAME" | python3 -m json.tool
 
 if [[ "${1:-}" == --activate ]]; then
-  if [[ -r /dev/tty ]]; then
-    read -r -p "Replace the active cluster with $NAME? dst-server stops, current cluster is backed up first. [y/N] " answer < /dev/tty
+  if [[ -t 0 ]]; then
+    read -r -p "Replace the active cluster with $NAME? dst-server stops, current cluster is backed up first. [y/N] " answer
     [[ "$answer" == y ]] || exit 1
+  elif [[ "${2:-}" != --yes ]]; then
+    echo "no terminal for confirmation: add --yes to activate unattended" >&2
+    exit 1
   fi
   set -a; . ./.env; set +a
   curl -fsS -u "${ADMIN_USER:-dst}:${ADMIN_PASSWORD:?ADMIN_PASSWORD missing in .env}" -X POST -F "name=$NAME" \
@@ -2970,7 +2974,7 @@ die() { printf '\033[1;31m[bootstrap] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 prompt() {
   local var="$1" label="$2" secret="${3:-}" value
   [[ -z "${!var:-}" ]] || return 0
-  [[ -r /dev/tty ]] || die "$var is not set and there is no terminal to ask — export it and re-run"
+  ( : < /dev/tty ) 2>/dev/null || die "$var is not set and there is no terminal to ask — export it and re-run"
   if [[ -n "$secret" ]]; then
     read -r -s -p "$label: " value < /dev/tty; echo
   else
