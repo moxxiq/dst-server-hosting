@@ -488,7 +488,7 @@ Run:
 podman run --rm --name dst-wait-smoke --platform=linux/amd64 -e CLUSTER_NAME=smoke -e AUTO_UPDATE=0 \
   -v smoke-install:/opt/dst localhost/dst-server:latest 2>&1 | head -5; podman volume rm smoke-install >/dev/null
 ```
-Expected: `DST binary missing — running steamcmd`, then steamcmd output ending in `Segmentation fault` (Mac only, expected), then `ERROR: … not found after update`. This proves the binary check and error path; the real update path is verified on the VPS in Task 9.
+Expected: `DST binary missing — running steamcmd`, then steamcmd output ending in `Segmentation fault` (Mac only: the 32-bit bootstrap runs under qemu-i386) and the container exits non-zero right there (`set -e` aborts on steamcmd's failure). This proves the binary check and that a failed update aborts the start; the real update path is verified on the VPS in Task 9.
 
 - [ ] **Step 7: Commit**
 
@@ -2971,6 +2971,7 @@ prompt() {
   printf -v "$var" '%s' "$value"
 }
 
+main() {
 log "1/8 packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
@@ -3073,6 +3074,11 @@ cat <<SUMMARY
   to your IP in the Vultr firewall — the panel is plain HTTP with Basic auth.
 
 SUMMARY
+}
+
+# Whole script is parsed before main runs, so `curl | bash` cannot be confused by
+# commands that read stdin; prompts use /dev/tty.
+main "$@" < /dev/null
 ```
 
 - [ ] **Step 2: shellcheck and a dry syntax run**
