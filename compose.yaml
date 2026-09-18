@@ -62,6 +62,8 @@ services:
     build: ./dst-admin
     image: localhost/dst-admin:latest
     container_name: dst-admin
+    security_opt:
+      - label=disable
     depends_on:
       - dst-saves
     environment:
