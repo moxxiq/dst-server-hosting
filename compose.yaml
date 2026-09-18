@@ -64,6 +64,8 @@ services:
     container_name: dst-admin
     security_opt:
       - label=disable
+    group_add:
+      - "0"
     depends_on:
       - dst-saves
     environment:
