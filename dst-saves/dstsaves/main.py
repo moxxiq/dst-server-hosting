@@ -79,10 +79,12 @@ class Service:
         trigger = None
         if st.last_cycles < 0:
             log.info("first reading: day=%s players=%s", cycles, players)
+        elif st.last_players > 0 and players == 0:
+            # `empty` wins over `day` when both land in one poll: the last-player-left
+            # snapshot is the one R2_ON_EMPTY promises to upload.
+            trigger = "empty"
         elif cycles > st.last_cycles:
             trigger = "day"
-        elif st.last_players > 0 and players == 0:
-            trigger = "empty"
         st.last_cycles, st.last_players = cycles, players
         save_state(self.state_path, st)
         if trigger:
@@ -110,15 +112,18 @@ class Service:
             return cycles - st.last_r2_cycles >= self.s.r2_every_days
         return False
 
-    def upload(self, path: Path) -> str:
+    def upload(self, path: Path, *, advance_clock: bool) -> str:
+        """Upload one local zip. Fresh backups of the live world (advance_clock=True) move
+        the R2 day clock to the zip's own day; re-uploads of old zips leave it alone."""
         key = self.r2.upload(path)
         log.info("uploaded %s", key)
-        cycles = self.live["cycles"]
-        if cycles >= 0:
-            self.state.last_r2_cycles = cycles
+        if advance_clock:
+            info = backup.parse_name(path.name)
+            if info and info["day"] is not None:
+                self.state.last_r2_cycles = info["day"]
         self.state.last_upload = {"name": path.name, "key": key, "at": now_iso()}
         save_state(self.state_path, self.state)
-        pruned = self.r2.prune(self.s.r2_keep)
+        pruned = self.r2.prune(self.s.r2_keep, protect=path.name)
         if pruned:
             log.info("pruned from R2: %s", ", ".join(pruned))
         return key
@@ -144,7 +149,7 @@ class Service:
             upload = force_upload if force_upload is not None else self.should_upload(tag, cycles)
             uploaded = False
             if upload:
-                self.upload(out)
+                self.upload(out, advance_clock=True)
                 uploaded = True
             self.state.last_backup = {"name": name, "tag": tag, "uploaded": uploaded, "at": now_iso(), "size": size}
             save_state(self.state_path, self.state)
@@ -231,7 +236,7 @@ def do_upload(name: str):
     s = svc()
     path = local_path(name)
     with s.lock:
-        key = s.upload(path)
+        key = s.upload(path, advance_clock=False)
     return {"name": name, "key": key}
 
 

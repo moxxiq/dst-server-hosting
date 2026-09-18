@@ -50,9 +50,10 @@ class R2:
     def delete(self, name: str) -> None:
         self.client.delete_object(Bucket=self.bucket, Key=self.prefix + name)
 
-    def prune(self, keep: int) -> list[str]:
-        """Delete all but the newest `keep` automatic zips. manual/pre-activate are never touched."""
-        auto = [e for e in self.list() if e["tag"] in AUTO_TAGS]
+    def prune(self, keep: int, protect: str | None = None) -> list[str]:
+        """Delete all but the newest `keep` automatic zips. manual/pre-activate are never
+        touched, and neither is `protect` (the object that was just uploaded)."""
+        auto = [e for e in self.list() if e["tag"] in AUTO_TAGS and e["name"] != protect]
         doomed = auto[:-keep] if keep > 0 and len(auto) > keep else []
         for e in doomed:
             self.delete(e["name"])
