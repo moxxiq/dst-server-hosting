@@ -2806,6 +2806,14 @@ curl -s -X POST 'localhost:8081/backup?tag=manual'; echo; ls -la data/backups/
 ```
 Expected: `live.shards.Master.alive: true`, `live.shards.Caves.alive: true`, `live.cycles >= 0`; manual backup returns `"uploaded": true`; the zip appears in `data/backups/` and in the panel's Clusters page under R2. Open `http://localhost:8080` in the browser (Basic auth) and check the dashboard pills, log panes, Mods page (lists the workshop ids from the zip), Admins page, Console (`c_announce("hi")` appears in the Master log).
 
+- [ ] **Step 5b: AUTO_RESTORE from R2 on an empty host**
+
+Run:
+```bash
+podman compose stop dst-server dst-saves && mv data/saves/qkation-cooperative data/saves/_moved && podman compose start dst-saves && sleep 20 && podman logs --tail 5 dst-saves && ls data/saves/qkation-cooperative/cluster.ini && podman compose start dst-server
+```
+Expected: dst-saves logs `restoring newest R2 backup <name>` then `restored <name> (<N> files) into /data/klei/DoNotStarveTogether/qkation-cooperative`; `cluster.ini` exists again; dst-server relaunches both shards. Then `rm -rf data/saves/_moved`.
+
 - [ ] **Step 6: Graceful stop → stop zip**
 
 Run: `time podman compose stop dst-server; podman logs dst-server 2>&1 | tail -8; ls data/backups/ | grep _stop`
