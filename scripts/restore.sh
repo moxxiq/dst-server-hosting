@@ -2,8 +2,9 @@
 # List backups, or fetch one into data/parked/.
 #   scripts/restore.sh                       list local + R2 backups
 #   scripts/restore.sh latest                newest R2 zip → data/parked/
-#   scripts/restore.sh <name> [--activate]   named zip → parked; --activate replaces the
-#                                            active cluster (stop, pre-activate backup, extract, start)
+#   scripts/restore.sh <name> [--activate [--yes]]
+#       named zip → parked; --activate replaces the active cluster (stop,
+#       pre-activate backup, extract, start), asking on a terminal or with --yes
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 API=http://127.0.0.1:8081
@@ -29,9 +30,12 @@ SOURCE=r2
 curl -fsS -X POST "$API/restore?source=$SOURCE&name=$NAME" | python3 -m json.tool
 
 if [[ "${1:-}" == --activate ]]; then
-  if [[ -r /dev/tty ]]; then
-    read -r -p "Replace the active cluster with $NAME? dst-server stops, current cluster is backed up first. [y/N] " answer < /dev/tty
+  if [[ -t 0 ]]; then
+    read -r -p "Replace the active cluster with $NAME? dst-server stops, current cluster is backed up first. [y/N] " answer
     [[ "$answer" == y ]] || exit 1
+  elif [[ "${2:-}" != --yes ]]; then
+    echo "no terminal for confirmation: add --yes to activate unattended" >&2
+    exit 1
   fi
   set -a
   # shellcheck disable=SC1091
