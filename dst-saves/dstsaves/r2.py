@@ -52,9 +52,11 @@ class R2:
 
     def prune(self, keep: int, protect: str | None = None) -> list[str]:
         """Delete all but the newest `keep` automatic zips. manual/pre-activate are never
-        touched, and neither is `protect` (the object that was just uploaded)."""
-        auto = [e for e in self.list() if e["tag"] in AUTO_TAGS and e["name"] != protect]
+        touched, and neither is `protect` (the object that was just uploaded), so a
+        re-upload of an old zip is the only case that leaves keep+1 in R2."""
+        auto = [e for e in self.list() if e["tag"] in AUTO_TAGS]
         doomed = auto[:-keep] if keep > 0 and len(auto) > keep else []
+        doomed = [e for e in doomed if e["name"] != protect]
         for e in doomed:
             self.delete(e["name"])
         return [e["name"] for e in doomed]
