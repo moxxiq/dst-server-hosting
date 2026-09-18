@@ -1,0 +1,13 @@
+# Secrets and runtime data — never commit.
+.env
+data/
+*.zip
+*.tar.gz
+
+# Local tooling / OS noise.
+.claude/
+.DS_Store
+__MACOSX/
+__pycache__/
+*.pyc
+.venv/
