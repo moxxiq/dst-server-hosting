@@ -43,9 +43,9 @@ launch_shard() {
   local shard="$1" fifo fd
   fifo="$CTL_DIR/$shard.cmd"
   rm -f "$fifo"
-  mkfifo "$fifo"
+  mkfifo "$fifo" || return 1
   # O_RDWR so this open never blocks and the shard never sees EOF on stdin.
-  exec {fd}<>"$fifo"
+  exec {fd}<>"$fifo" || return 1
   # shellcheck disable=SC2034
   SHARD_FD[$shard]=$fd
   ( cd "$DST_DIR/bin64" && exec ./dontstarve_dedicated_server_nullrenderer_x64 \
@@ -90,7 +90,7 @@ main() {
 
   trap on_signal TERM INT
   local s
-  for s in "${SHARDS[@]}"; do launch_shard "$s"; done
+  for s in "${SHARDS[@]}"; do launch_shard "$s" || finish 1; done
 
   local rc=0
   wait -n "${SHARD_PID[@]}" || rc=$?

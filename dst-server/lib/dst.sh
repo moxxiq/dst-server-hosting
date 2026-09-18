@@ -33,6 +33,7 @@ write_cluster_token() {
     return 0
   fi
   (umask 077 && printf '%s' "$CLUSTER_TOKEN" > "$tok")
+  chmod 600 "$tok"
   log "wrote cluster_token.txt from CLUSTER_TOKEN"
 }
 
@@ -66,7 +67,7 @@ send_cmd() {
   printf '%s\n' "$line" >&"${SHARD_FD[$shard]}"
 }
 
-shard_alive() { kill -0 "${SHARD_PID[$1]}" 2>/dev/null; }
+shard_alive() { kill -0 "${SHARD_PID[$1]:-}" 2>/dev/null; }
 
 # Wait up to $2 seconds for shard $1 to exit, then TERM, then KILL.
 wait_exit_or_kill() {
@@ -98,11 +99,11 @@ write_stop_zip() {
   [[ -f "$CLUSTER_DIR/cluster.ini" ]] || return 0
   local day="" ts name
   if [[ -f "$CTL_DIR/state.json" ]]; then
-    day="$(sed -nE 's/.*"cycles": *([0-9]+).*/\1/p' "$CTL_DIR/state.json" | head -1)"
+    day="$(sed -nE 's/.*"cycles": *([0-9]+).*/\1/p' "$CTL_DIR/state.json" | head -1)" || day=""
   fi
   ts="$(date -u +%Y%m%dT%H%M%SZ)"
   if [[ -n "$day" ]]; then name="${ts}_day$(printf '%04d' "$day")_stop.zip"; else name="${ts}_stop.zip"; fi
   ( cd "$KLEI_DIR/DoNotStarveTogether" \
-    && zip -qrX "$BACKUP_DIR/$name" "$CLUSTER_NAME" -x '*/backup/*' '*.DS_Store' '__MACOSX/*' )
+    && zip -qrX "$BACKUP_DIR/$name" "$CLUSTER_NAME" -x '*/backup/*' '*.DS_Store' '*__MACOSX/*' ) || log "stop zip failed"
   log "stop zip written: $name"
 }
