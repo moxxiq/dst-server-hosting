@@ -473,8 +473,8 @@ main "$@"
 
 - [ ] **Step 4: shellcheck**
 
-Run: `shellcheck -x dst-server/entrypoint.sh dst-server/lib/dst.sh && echo SHELLCHECK_OK`
-Expected: `SHELLCHECK_OK`. (`-x` follows the `source=` directive.)
+Run: `shellcheck -x -P SCRIPTDIR dst-server/entrypoint.sh dst-server/lib/dst.sh && echo SHELLCHECK_OK`
+Expected: `SHELLCHECK_OK`. (`-x` follows the `source=` directive; `-P SCRIPTDIR` resolves it relative to the script's directory.)
 
 - [ ] **Step 5: Build the image**
 
@@ -547,14 +547,15 @@ podman volume create "$VOLUME" >/dev/null 2>&1 || true
 podman run --rm -it --userns=keep-id:uid=1000,gid=1000 \
   -v "$VOLUME:/opt/dst" localhost/depotdownloader:3.4.0 \
   -app 343050 -os linux -osarch 64 -dir /opt/dst -max-downloads 8 "$@"
+# DepotDownloader does not restore the executable bit; dst-server's entrypoint tests -x.
 podman run --rm --userns=keep-id:uid=1000,gid=1000 -v "$VOLUME:/opt/dst" docker.io/library/alpine:3.20 \
-  sh -c 'ls -l /opt/dst/bin64/dontstarve_dedicated_server_nullrenderer_x64 && du -sh /opt/dst'
+  sh -c 'chmod +x /opt/dst/bin64/dontstarve_dedicated_server_nullrenderer_x64 && ls -l /opt/dst/bin64/dontstarve_dedicated_server_nullrenderer_x64 && du -sh /opt/dst'
 ```
 
 - [ ] **Step 3: shellcheck and run it**
 
 Run: `shellcheck scripts/local-fetch-dst.sh && chmod +x scripts/local-fetch-dst.sh && scripts/local-fetch-dst.sh`
-Expected: DepotDownloader prints depot download progress and ends with `Total downloaded: …`; the final `ls -l` shows the x64 binary owned by uid 1000 and `du` around 1.5–2.5G. Takes several minutes.
+Expected: DepotDownloader prints depot download progress and ends with `Total downloaded: …`; the final `ls -l` shows the x64 binary owned by uid 1000 with mode `-rwxr-xr-x`, and `du` around 4G. Takes several minutes.
 
 - [ ] **Step 4: Confirm the console functions used by dst-saves exist in this DST build**
 
