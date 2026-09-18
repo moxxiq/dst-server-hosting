@@ -1,0 +1,19 @@
+:root { --pico-font-size: 15px; }
+.muted { color: var(--pico-muted-color); }
+.flash { padding: .6rem 1rem; border-radius: var(--pico-border-radius); margin-bottom: 1rem; }
+.flash.ok { background: #14532d; color: #dcfce7; }
+.flash.bad { background: #7f1d1d; color: #fee2e2; }
+.pill { display: inline-block; padding: .05rem .6rem; border-radius: 999px; font-size: .85em; background: #374151; color: #e5e7eb; }
+.pill.good { background: #166534; color: #dcfce7; }
+.pill.bad { background: #991b1b; color: #fee2e2; }
+.actions { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+.actions form, table form { margin: 0; display: inline; }
+.actions button, table button { margin: 0; width: auto; padding: .3rem .8rem; font-size: .85rem; }
+form.inline { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+form.inline input, form.inline select, form.inline button { margin: 0; width: auto; }
+form.inline input[type=text], form.inline input:not([type]) { flex: 1; min-width: 14rem; }
+pre.log { max-height: 22rem; overflow: auto; font-size: .78rem; line-height: 1.35; white-space: pre-wrap; margin: 0 0 1rem; }
+table td, table th { font-size: .9rem; vertical-align: middle; }
+article header { font-weight: 600; }
+details summary { cursor: pointer; }
+textarea { font-family: var(--pico-font-family-monospace); font-size: .85rem; }

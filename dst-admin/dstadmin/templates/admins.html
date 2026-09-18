@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<article>
+  <header>adminlist.txt</header>
+  <p class="muted">One Klei user id per line (<code>KU_…</code>). Anything else is dropped on save. Players find their id in the game: Options → Account, or the console prints it on join.</p>
+  {% if exists %}
+  <form method="post" action="/admins">
+    <textarea name="text" rows="10" spellcheck="false" placeholder="KU_xxxxxxxx">{{ text }}</textarea>
+    <button>Save</button>
+  </form>
+  {% else %}<p class="muted">No active cluster.</p>{% endif %}
+</article>
+{% endblock %}

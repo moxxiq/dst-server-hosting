@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<article>
+  <header>Steam Workshop mods</header>
+  <p class="muted">Entries in each shard's <code>modoverrides.lua</code>. dst-server derives <code>dedicated_server_mods_setup.lua</code> from them on every start, so DST downloads whatever is listed here.</p>
+  <form method="post" action="/mods/add" class="inline">
+    <input name="workshop" placeholder="workshop id or steamcommunity URL" required>
+    <label><input type="checkbox" name="restart"> restart</label>
+    <button>Add to all shards</button>
+  </form>
+  {% for shard, info in shards.items() %}
+  <h5>{{ shard }}</h5>
+  {% if info.error %}<p class="flash bad">{{ info.error }}</p>{% endif %}
+  {% if info.entries %}
+  <table>
+    <thead><tr><th>Workshop id</th><th>Enabled</th><th></th></tr></thead>
+    <tbody>
+    {% for e in info.entries %}
+    <tr>
+      <td><a href="https://steamcommunity.com/sharedfiles/filedetails/?id={{ e.id }}" target="_blank" rel="noopener">{{ e.id }}</a></td>
+      <td><span class="pill {{ 'good' if e.enabled else 'bad' }}">{{ "on" if e.enabled else "off" }}</span></td>
+      <td class="actions"><form method="post" action="/mods/remove"><input type="hidden" name="wid" value="{{ e.id }}"><button class="secondary">Remove</button></form></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">no workshop entries</p>{% endif %}
+  <details>
+    <summary>Raw {{ shard }}/modoverrides.lua</summary>
+    <form method="post" action="/mods/raw">
+      <input type="hidden" name="shard" value="{{ shard }}">
+      <textarea name="text" rows="14" spellcheck="false">{{ info.text }}</textarea>
+      <label><input type="checkbox" name="restart"> restart</label>
+      <button>Save</button>
+    </form>
+  </details>
+  {% endfor %}
+  {% if not shards %}<p class="muted">No active cluster.</p>{% endif %}
+</article>
+
+<article>
+  <header>Local mods (data/mods)</header>
+  <p class="muted">Non-Workshop mods. Upload a zip containing <code>modinfo.lua</code> (at the root or inside one folder). Copied into the DST install on every start.</p>
+  <form method="post" action="/mods/upload" enctype="multipart/form-data" class="inline">
+    <input type="file" name="file" accept=".zip" required>
+    <label><input type="checkbox" name="restart"> restart</label>
+    <button>Upload mod zip</button>
+  </form>
+  {% if local %}
+  <table><tbody>
+  {% for m in local %}
+  <tr><td>{{ m.name }}</td><td>{% if not m.valid %}<span class="pill bad">no modinfo.lua</span>{% endif %}</td>
+      <td class="actions"><form method="post" action="/mods/delete-local" onsubmit="return confirm('Remove local mod {{ m.name }}?')"><input type="hidden" name="name" value="{{ m.name }}"><button class="secondary">Delete</button></form></td></tr>
+  {% endfor %}
+  </tbody></table>
+  {% else %}<p class="muted">none</p>{% endif %}
+</article>
+{% endblock %}
