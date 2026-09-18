@@ -35,7 +35,11 @@ class Podman:
         self.container = container
         self.client = httpx.Client(
             transport=httpx.HTTPTransport(uds=sock),
-            base_url="http://podman",
+            # The libpod REST router 404s real endpoints (containers/*) on an
+            # unversioned path — only /libpod/_ping tolerates it. Any syntactically
+            # valid version is accepted (unlike the Docker-compat routes, libpod
+            # ignores the actual number here), so pin a low, stable one.
+            base_url="http://podman/v1.0.0",
             timeout=httpx.Timeout(10.0, read=200.0),
         )
 
