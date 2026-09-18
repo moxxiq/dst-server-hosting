@@ -1,0 +1,86 @@
+name: dst
+
+x-common: &common
+  restart: unless-stopped
+  userns_mode: "keep-id:uid=1000,gid=1000"
+
+services:
+  dst-saves:
+    <<: *common
+    build: ./dst-saves
+    image: localhost/dst-saves:latest
+    container_name: dst-saves
+    environment:
+      CLUSTER_NAME: ${CLUSTER_NAME:?CLUSTER_NAME missing in .env}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?R2_ACCOUNT_ID missing in .env}
+      R2_BUCKET: ${R2_BUCKET:?R2_BUCKET missing in .env}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID missing in .env}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY missing in .env}
+      R2_EVERY_DAYS: ${R2_EVERY_DAYS:-5}
+      R2_ON_EMPTY: ${R2_ON_EMPTY:-1}
+      R2_KEEP: ${R2_KEEP:-30}
+      LOCAL_KEEP: ${LOCAL_KEEP:-30}
+      AUTO_RESTORE: ${AUTO_RESTORE:-1}
+      POLL_SECONDS: ${POLL_SECONDS:-30}
+    volumes:
+      - ./data/saves:/data/klei/DoNotStarveTogether
+      - ./data/backups:/data/backups
+      - ./data/parked:/data/parked
+      - ctl:/ctl
+    ports:
+      - "127.0.0.1:8081:8081"
+    stop_grace_period: 60s
+
+  dst-server:
+    <<: *common
+    build: ./dst-server
+    image: localhost/dst-server:latest
+    container_name: dst-server
+    platform: linux/amd64
+    depends_on:
+      - dst-saves
+    environment:
+      CLUSTER_NAME: ${CLUSTER_NAME:?CLUSTER_NAME missing in .env}
+      CLUSTER_TOKEN: ${CLUSTER_TOKEN:-}
+      AUTO_UPDATE: ${AUTO_UPDATE:-1}
+    volumes:
+      - dst-install:/opt/dst
+      - steam-home:/home/steam/Steam
+      - ./data/saves:/data/klei/DoNotStarveTogether
+      - ./data/mods:/data/mods
+      - ./data/backups:/data/backups
+      - ctl:/ctl
+    ports:
+      - "10999:10999/udp"
+      - "10998:10998/udp"
+      - "27016-27018:27016-27018/udp"
+      - "8766-8768:8766-8768/udp"
+    stop_grace_period: 150s
+
+  dst-admin:
+    <<: *common
+    build: ./dst-admin
+    image: localhost/dst-admin:latest
+    container_name: dst-admin
+    depends_on:
+      - dst-saves
+    environment:
+      CLUSTER_NAME: ${CLUSTER_NAME:?CLUSTER_NAME missing in .env}
+      ADMIN_USER: ${ADMIN_USER:-dst}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      DST_SAVES_URL: http://dst-saves:8081
+      DST_CONTAINER: dst-server
+    volumes:
+      - ./data/saves:/data/klei/DoNotStarveTogether
+      - ./data/parked:/data/parked
+      - ./data/mods:/data/mods
+      - ./data/backups:/data/backups
+      - ctl:/ctl
+      - ${PODMAN_SOCK:?PODMAN_SOCK missing in .env}:/run/podman/podman.sock
+    ports:
+      - "8080:8080"
+
+volumes:
+  dst-install:
+  steam-home:
+  ctl:
