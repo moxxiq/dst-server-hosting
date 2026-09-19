@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<article>
+  <header>Console</header>
+  <p class="muted">One Lua line goes straight into the shard's stdin. Examples: <code>c_announce("restart in 5 min")</code>, <code>c_save()</code>, <code>c_listallplayers()</code>, <code>c_regenerateworld()</code> (destructive).</p>
+  {% if shards %}
+  <form method="post" action="/console" class="inline">
+    <select name="shard">{% for s in shards %}<option value="{{ s }}">{{ s }}</option>{% endfor %}</select>
+    <input name="command" placeholder='c_announce("hello")' required autocomplete="off">
+    <button>Send</button>
+  </form>
+  {% for s in shards %}
+  <details open><summary>{{ s }} · server_log.txt</summary><pre class="log" data-log="{{ s }}"></pre></details>
+  {% endfor %}
+  {% else %}<p class="muted">No active cluster.</p>{% endif %}
+</article>
+{% endblock %}
+{% block scripts %}<script>dstAdmin.startLogs();</script>{% endblock %}

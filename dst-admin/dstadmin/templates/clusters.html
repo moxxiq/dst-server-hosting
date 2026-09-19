@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<article>
+  <header>Active cluster <code>{{ cluster_name }}</code></header>
+  {% if active.ready %}
+  <p>{{ active.display_name }} · shards: {{ active.shards | join(", ") }} · token: {{ "present" if active.has_token else "missing (set CLUSTER_TOKEN in .env)" }}</p>
+  {% if active.parse_error %}<p class="flash bad">cluster.ini parse error: {{ active.parse_error }}</p>{% endif %}
+  <footer class="actions">
+    <form method="post" action="/clusters/park"><button class="secondary">Park a copy (backup now + copy to parked)</button></form>
+  </footer>
+  {% else %}
+  <p class="muted">No active cluster. Upload a zip below and activate it, restore a backup, or use the Wizard.</p>
+  {% endif %}
+</article>
+
+<article>
+  <header>Parked clusters</header>
+  <form method="post" action="/clusters/upload" enctype="multipart/form-data" class="inline">
+    <input type="file" name="file" accept=".zip" required> <button>Upload zip</button>
+  </form>
+  {% if parked %}
+  <table>
+    <thead><tr><th>File</th><th>Size</th><th>Shards</th><th></th></tr></thead>
+    <tbody>
+    {% for p in parked %}
+    <tr>
+      <td><a href="/clusters/download/{{ p.name }}">{{ p.name }}</a></td>
+      <td>{{ "%.1f" | format(p.size / 1048576) }} MB</td>
+      <td>{% if p.error %}<span class="pill bad">{{ p.error }}</span>{% else %}{{ p.shards | join(", ") or "none" }}{% endif %}</td>
+      <td class="actions">
+        {% if not p.error %}
+        <form method="post" action="/clusters/activate" onsubmit="return confirm('Activate {{ p.name }}? dst-server stops, the current cluster is backed up (pre-activate, kept forever in R2), then replaced.')">
+          <input type="hidden" name="name" value="{{ p.name }}"><button>Activate</button></form>
+        {% endif %}
+        <form method="post" action="/clusters/delete" onsubmit="return confirm('Delete {{ p.name }} from parked?')">
+          <input type="hidden" name="name" value="{{ p.name }}"><button class="secondary">Delete</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">Nothing parked.</p>{% endif %}
+</article>
+
+<article>
+  <header>Backups</header>
+  {% if backups_error %}<p class="flash bad">{{ backups_error }}</p>{% endif %}
+  {% for source, label in [("local", "Local (data/backups)"), ("r2", "Cloudflare R2")] %}
+  <h5>{{ label }}</h5>
+  {% if backups[source] %}
+  <table>
+    <thead><tr><th>Name</th><th>Day</th><th>Tag</th><th>Size</th><th></th></tr></thead>
+    <tbody>
+    {% for b in backups[source] | reverse %}
+    <tr>
+      <td><code>{{ b.name }}</code></td>
+      <td>{{ b.day + 1 if b.day is not none else "–" }}</td>
+      <td><span class="pill">{{ b.tag }}</span></td>
+      <td>{{ "%.1f" | format(b.size / 1048576) }} MB</td>
+      <td class="actions">
+        <form method="post" action="/backups/restore"><input type="hidden" name="source" value="{{ source }}"><input type="hidden" name="name" value="{{ b.name }}"><button>To parked</button></form>
+        {% if source == "local" %}
+        <form method="post" action="/backups/upload"><input type="hidden" name="name" value="{{ b.name }}"><button class="secondary">Upload to R2</button></form>
+        {% endif %}
+        <form method="post" action="/backups/delete" onsubmit="return confirm('Delete {{ b.name }} from {{ source }}?')"><input type="hidden" name="source" value="{{ source }}"><input type="hidden" name="name" value="{{ b.name }}"><button class="secondary">Delete</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">none</p>{% endif %}
+  {% endfor %}
+</article>
+{% endblock %}

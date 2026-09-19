@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid">
+  <article>
+    <header>dst-server</header>
+    <p><span class="pill" id="c-state">…</span> <span class="muted" id="c-detail"></span></p>
+    <footer class="actions">
+      <form method="post" action="/server/start"><button>Start</button></form>
+      <form method="post" action="/server/stop" onsubmit="return confirm('Graceful stop: c_save() and c_shutdown(true) on every shard, then a local stop zip. Continue?')"><button class="secondary">Stop</button></form>
+      <form method="post" action="/server/restart" onsubmit="return confirm('Restart dst-server? Players get disconnected; the world is saved first.')"><button class="secondary">Restart</button></form>
+    </footer>
+  </article>
+  <article>
+    <header>World</header>
+    <p>Day <strong id="day">–</strong> · players online <strong id="players">–</strong></p>
+    <table id="shards"><thead><tr><th>Shard</th><th>State</th><th>Players</th></tr></thead><tbody></tbody></table>
+  </article>
+  <article>
+    <header>Backups</header>
+    <p>Last local: <span id="last-backup">–</span></p>
+    <p>Last R2: <span id="last-upload">–</span></p>
+    <p class="muted" id="policy"></p>
+    <footer class="actions"><form method="post" action="/backup"><button>Backup now → R2</button></form></footer>
+  </article>
+</div>
+<h3>Logs</h3>
+<details open><summary>dst-server container</summary><pre class="log" data-log="container"></pre></details>
+{% for s in shards %}
+<details open><summary>{{ s }} · server_log.txt</summary><pre class="log" data-log="{{ s }}"></pre></details>
+{% endfor %}
+{% if not shards %}<p class="muted">No active cluster yet: upload a zip on the Clusters page, restore a backup, or run the Wizard.</p>{% endif %}
+{% endblock %}
+{% block scripts %}<script>dstAdmin.startDashboard();</script>{% endblock %}

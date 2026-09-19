@@ -473,8 +473,8 @@ main "$@"
 
 - [ ] **Step 4: shellcheck**
 
-Run: `shellcheck -x dst-server/entrypoint.sh dst-server/lib/dst.sh && echo SHELLCHECK_OK`
-Expected: `SHELLCHECK_OK`. (`-x` follows the `source=` directive.)
+Run: `shellcheck -x -P SCRIPTDIR dst-server/entrypoint.sh dst-server/lib/dst.sh && echo SHELLCHECK_OK`
+Expected: `SHELLCHECK_OK`. (`-x` follows the `source=` directive; `-P SCRIPTDIR` resolves it relative to the script's directory.)
 
 - [ ] **Step 5: Build the image**
 
@@ -547,14 +547,15 @@ podman volume create "$VOLUME" >/dev/null 2>&1 || true
 podman run --rm -it --userns=keep-id:uid=1000,gid=1000 \
   -v "$VOLUME:/opt/dst" localhost/depotdownloader:3.4.0 \
   -app 343050 -os linux -osarch 64 -dir /opt/dst -max-downloads 8 "$@"
+# DepotDownloader does not restore the executable bit; dst-server's entrypoint tests -x.
 podman run --rm --userns=keep-id:uid=1000,gid=1000 -v "$VOLUME:/opt/dst" docker.io/library/alpine:3.20 \
-  sh -c 'ls -l /opt/dst/bin64/dontstarve_dedicated_server_nullrenderer_x64 && du -sh /opt/dst'
+  sh -c 'chmod +x /opt/dst/bin64/dontstarve_dedicated_server_nullrenderer_x64 && ls -l /opt/dst/bin64/dontstarve_dedicated_server_nullrenderer_x64 && du -sh /opt/dst'
 ```
 
 - [ ] **Step 3: shellcheck and run it**
 
 Run: `shellcheck scripts/local-fetch-dst.sh && chmod +x scripts/local-fetch-dst.sh && scripts/local-fetch-dst.sh`
-Expected: DepotDownloader prints depot download progress and ends with `Total downloaded: …`; the final `ls -l` shows the x64 binary owned by uid 1000 and `du` around 1.5–2.5G. Takes several minutes.
+Expected: DepotDownloader prints depot download progress and ends with `Total downloaded: …`; the final `ls -l` shows the x64 binary owned by uid 1000 with mode `-rwxr-xr-x`, and `du` around 4G. Takes several minutes.
 
 - [ ] **Step 4: Confirm the console functions used by dst-saves exist in this DST build**
 
@@ -2805,6 +2806,14 @@ curl -s -X POST 'localhost:8081/backup?tag=manual'; echo; ls -la data/backups/
 ```
 Expected: `live.shards.Master.alive: true`, `live.shards.Caves.alive: true`, `live.cycles >= 0`; manual backup returns `"uploaded": true`; the zip appears in `data/backups/` and in the panel's Clusters page under R2. Open `http://localhost:8080` in the browser (Basic auth) and check the dashboard pills, log panes, Mods page (lists the workshop ids from the zip), Admins page, Console (`c_announce("hi")` appears in the Master log).
 
+- [ ] **Step 5b: AUTO_RESTORE from R2 on an empty host**
+
+Run:
+```bash
+podman compose stop dst-server dst-saves && mv data/saves/qkation-cooperative data/saves/_moved && podman compose start dst-saves && sleep 20 && podman logs --tail 5 dst-saves && ls data/saves/qkation-cooperative/cluster.ini && podman compose start dst-server
+```
+Expected: dst-saves logs `restoring newest R2 backup <name>` then `restored <name> (<N> files) into /data/klei/DoNotStarveTogether/qkation-cooperative`; `cluster.ini` exists again; dst-server relaunches both shards. Then `rm -rf data/saves/_moved`.
+
 - [ ] **Step 6: Graceful stop → stop zip**
 
 Run: `time podman compose stop dst-server; podman logs dst-server 2>&1 | tail -8; ls data/backups/ | grep _stop`
@@ -2848,8 +2857,9 @@ curl -fsS -X POST "http://127.0.0.1:8081/backup?tag=${TAG}" | python3 -m json.to
 # List backups, or fetch one into data/parked/.
 #   scripts/restore.sh                       list local + R2 backups
 #   scripts/restore.sh latest                newest R2 zip → data/parked/
-#   scripts/restore.sh <name> [--activate]   named zip → parked; --activate replaces the
-#                                            active cluster (stop, pre-activate backup, extract, start)
+#   scripts/restore.sh <name> [--activate [--yes]]
+#       named zip → parked; --activate replaces the active cluster (stop,
+#       pre-activate backup, extract, start), asking on a terminal or with --yes
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 API=http://127.0.0.1:8081
@@ -2861,7 +2871,7 @@ d = json.load(sys.stdin)
 for src in ("local", "r2"):
     print(f"== {src} ==")
     for e in d[src]:
-        print(f"{e[\"name\"]:48} {e[\"size\"] / 1048576:7.1f} MB")'
+        print("{:48} {:7.1f} MB".format(e["name"], e["size"] / 1048576))'
 }
 
 [[ $# -gt 0 ]] || { list; exit 0; }
@@ -2875,9 +2885,12 @@ SOURCE=r2
 curl -fsS -X POST "$API/restore?source=$SOURCE&name=$NAME" | python3 -m json.tool
 
 if [[ "${1:-}" == --activate ]]; then
-  if [[ -r /dev/tty ]]; then
-    read -r -p "Replace the active cluster with $NAME? dst-server stops, current cluster is backed up first. [y/N] " answer < /dev/tty
+  if [[ -t 0 ]]; then
+    read -r -p "Replace the active cluster with $NAME? dst-server stops, current cluster is backed up first. [y/N] " answer
     [[ "$answer" == y ]] || exit 1
+  elif [[ "${2:-}" != --yes ]]; then
+    echo "no terminal for confirmation: add --yes to activate unattended" >&2
+    exit 1
   fi
   set -a; . ./.env; set +a
   curl -fsS -u "${ADMIN_USER:-dst}:${ADMIN_PASSWORD:?ADMIN_PASSWORD missing in .env}" -X POST -F "name=$NAME" \
@@ -2961,7 +2974,7 @@ die() { printf '\033[1;31m[bootstrap] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 prompt() {
   local var="$1" label="$2" secret="${3:-}" value
   [[ -z "${!var:-}" ]] || return 0
-  [[ -r /dev/tty ]] || die "$var is not set and there is no terminal to ask — export it and re-run"
+  ( : < /dev/tty ) 2>/dev/null || die "$var is not set and there is no terminal to ask — export it and re-run"
   if [[ -n "$secret" ]]; then
     read -r -s -p "$label: " value < /dev/tty; echo
   else
