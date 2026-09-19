@@ -103,7 +103,10 @@ write_stop_zip() {
   fi
   ts="$(date -u +%Y%m%dT%H%M%SZ)"
   if [[ -n "$day" ]]; then name="${ts}_day$(printf '%04d' "$day")_stop.zip"; else name="${ts}_stop.zip"; fi
-  ( cd "$KLEI_DIR/DoNotStarveTogether" \
-    && zip -qrX "$BACKUP_DIR/$name" "$CLUSTER_NAME" -x '*/backup/*' '*.DS_Store' '*__MACOSX/*' ) || log "stop zip failed"
-  log "stop zip written: $name"
+  if ( cd "$KLEI_DIR/DoNotStarveTogether" \
+       && zip -qrX "$BACKUP_DIR/$name" "$CLUSTER_NAME" -x '*/backup/*' '*.DS_Store' '*__MACOSX/*' ); then
+    log "stop zip written: $name"
+  else
+    log "stop zip FAILED: $name"
+  fi
 }

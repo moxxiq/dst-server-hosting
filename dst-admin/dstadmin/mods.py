@@ -2,7 +2,7 @@
 import re
 from pathlib import Path
 
-ENTRY_RE = re.compile(r'\[\s*"(workshop-\d+)"\s*\]\s*=\s*\{')
+ENTRY_RE = re.compile(r"""\[\s*["'](workshop-\d+)["']\s*\]\s*=\s*\{""")
 ENABLED_RE = re.compile(r"\benabled\s*=\s*(true|false)")
 
 

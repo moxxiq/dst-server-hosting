@@ -269,6 +269,13 @@ def do_activate(name: str = Query(...)):
     with s.lock:
         try:
             files = restore.extract_cluster(path, s.s.cluster_dir)
+            # The world just changed: drop the previous world's day so a stop zip
+            # taken before the first poll of the new world is not mislabelled.
+            s.live = {"polled_at": None, "cycles": -1, "players": 0, "shards": {}}
+            s.state.last_cycles = -1
+            s.state.last_players = -1
+            save_state(s.state_path, s.state)
+            save_json(s.s.ctl_dir / "state.json", s.live)
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
     log.info("activated %s (%d files)", name, files)

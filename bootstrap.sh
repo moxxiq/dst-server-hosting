@@ -52,7 +52,16 @@ apt-get install -y -qq podman uidmap slirp4netns passt fuse-overlayfs dbus-user-
 log "podman $(podman --version | awk '{print $3}')"
 
 log "2/8 user $DST_USER (rootless podman, lingering)"
-if id "$DST_USER" > /dev/null 2>&1; then log "user exists"; else useradd -m -s /bin/bash "$DST_USER"; fi
+if id "$DST_USER" > /dev/null 2>&1; then
+  log "user exists (uid $(id -u "$DST_USER"))"
+elif useradd -u 1000 -m -s /bin/bash "$DST_USER" 2>/dev/null; then
+  log "created $DST_USER at uid 1000"
+else
+  # UID 1000 is taken (common on Ubuntu cloud images, which ship an `ubuntu` user).
+  # keep-id maps whatever uid dst gets onto the images' steam user, so any uid works.
+  useradd -m -s /bin/bash "$DST_USER"
+  log "created $DST_USER at uid $(id -u "$DST_USER") (1000 was taken)"
+fi
 DST_UID="$(id -u "$DST_USER")"
 grep -q "^$DST_USER:" /etc/subuid || usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$DST_USER"
 loginctl enable-linger "$DST_USER"
