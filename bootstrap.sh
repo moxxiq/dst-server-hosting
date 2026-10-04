@@ -73,7 +73,8 @@ if [[ -s /root/.ssh/authorized_keys ]]; then
   log "copied root's SSH keys to $DST_USER"
 fi
 if [[ -n "${DST_PASSWORD:-}" ]]; then
-  printf '%s:%s\n' "$DST_USER" "$DST_PASSWORD" | chpasswd
+  # Pre-hash and pass with -e: PAM pwquality would otherwise reject simple passwords.
+  printf '%s:%s\n' "$DST_USER" "$(printf '%s' "$DST_PASSWORD" | openssl passwd -6 -stdin)" | chpasswd -e
   printf 'Match User %s\n  PasswordAuthentication yes\n' "$DST_USER" > /etc/ssh/sshd_config.d/10-dst-password.conf
   systemctl reload ssh 2>/dev/null || systemctl reload sshd
   log "password login enabled for $DST_USER"
