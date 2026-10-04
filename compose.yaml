@@ -1,5 +1,11 @@
 name: dst
 
+# podman-compose wraps services in a pod by default, and rootless podman rejects
+# --userns inside a pod ("--userns and --pod cannot be set together"). Run the
+# services as plain containers on the compose network instead.
+x-podman:
+  in_pod: false
+
 x-common: &common
   restart: unless-stopped
   userns_mode: "keep-id:uid=1000,gid=1000"
