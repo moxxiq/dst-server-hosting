@@ -8,7 +8,8 @@
 # prompts on a terminal:
 #   CLUSTER_NAME CLUSTER_TOKEN R2_ACCOUNT_ID R2_BUCKET R2_ACCESS_KEY_ID
 #   R2_SECRET_ACCESS_KEY ADMIN_USER (default dst) ADMIN_PASSWORD
-# Optional: AUTO_UPDATE R2_EVERY_DAYS R2_ON_EMPTY R2_KEEP LOCAL_KEEP AUTO_RESTORE
+# Optional: DST_PASSWORD (ssh password for user dst; keys from root are copied anyway)
+#           AUTO_UPDATE R2_EVERY_DAYS R2_ON_EMPTY R2_KEEP LOCAL_KEEP AUTO_RESTORE
 #           REPO_URL BRANCH COMPOSE_VERSION FORCE_ENV=1 (rewrite an existing .env)
 # Idempotent: safe to re-run; each step reports what already existed.
 set -Eeuo pipefail
@@ -63,6 +64,20 @@ else
   log "created $DST_USER at uid $(id -u "$DST_USER") (1000 was taken)"
 fi
 DST_UID="$(id -u "$DST_USER")"
+# SSH as dst: reuse the keys Vultr put on root, and optionally a password.
+if [[ -s /root/.ssh/authorized_keys ]]; then
+  install -d -m 700 -o "$DST_USER" -g "$DST_USER" "$HOME_DIR/.ssh"
+  touch "$HOME_DIR/.ssh/authorized_keys"
+  sort -u /root/.ssh/authorized_keys "$HOME_DIR/.ssh/authorized_keys" -o "$HOME_DIR/.ssh/authorized_keys"
+  chown "$DST_USER:$DST_USER" "$HOME_DIR/.ssh/authorized_keys"; chmod 600 "$HOME_DIR/.ssh/authorized_keys"
+  log "copied root's SSH keys to $DST_USER"
+fi
+if [[ -n "${DST_PASSWORD:-}" ]]; then
+  printf '%s:%s\n' "$DST_USER" "$DST_PASSWORD" | chpasswd
+  printf 'Match User %s\n  PasswordAuthentication yes\n' "$DST_USER" > /etc/ssh/sshd_config.d/10-dst-password.conf
+  systemctl reload ssh 2>/dev/null || systemctl reload sshd
+  log "password login enabled for $DST_USER"
+fi
 grep -q "^$DST_USER:" /etc/subuid || usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$DST_USER"
 loginctl enable-linger "$DST_USER"
 for _ in $(seq 1 30); do [[ -S "/run/user/$DST_UID/bus" ]] && break; sleep 1; done

@@ -24,6 +24,20 @@ export CLUSTER_NAME=my-world CLUSTER_TOKEN=pds-g^KU_... \
 curl -fsSL https://raw.githubusercontent.com/moxxiq/dst-server-hosting/main/bootstrap.sh | sudo -E bash
 ```
 
+As a **Vultr Startup Script** (paste into Vultr → Startup Scripts → Boot, attach when deploying,
+and pick your SSH key on the deploy page too):
+
+```bash
+#!/bin/bash
+export CLUSTER_NAME=qkation-cooperative CLUSTER_TOKEN='...' \
+       R2_ACCOUNT_ID='...' R2_BUCKET=dst R2_ACCESS_KEY_ID='...' R2_SECRET_ACCESS_KEY='...' \
+       ADMIN_USER=dst ADMIN_PASSWORD='...' DST_PASSWORD='...'
+curl -fsSL https://raw.githubusercontent.com/moxxiq/dst-server-hosting/main/bootstrap.sh | bash > /var/log/dst-bootstrap.log 2>&1
+```
+
+Then `ssh dst@<vps-ip>` with your SSH key (copied from root) or `DST_PASSWORD`. Progress:
+`ssh root@<vps-ip> tail -f /var/log/dst-bootstrap.log`.
+
 It installs podman + podman-compose, creates the rootless `dst` user, clones this repo to
 `/home/dst/dst-server-hosting`, writes `.env`, builds and starts the stack, and opens the
 firewall (22/tcp, 8080/tcp, DST UDP ports). Re-running is safe.
